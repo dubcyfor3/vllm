@@ -1139,10 +1139,12 @@ def scaled_fp4_experts_quant(
 
     if expert_map is not None:        
         num_tokens_expanded = expert_map.shape[0]
-        input_tensor = torch.empty((num_tokens_expanded, input_tensor.shape[1]),
+        input_tensor_permuted = torch.empty((num_tokens_expanded, input_tensor.shape[1]),
                                       device=input_tensor.device,
                                       dtype=input_tensor.dtype)
         moe_permute(input_tensor, expert_map, input_tensor_permuted)
+    else:
+        input_tensor_permuted = input_tensor
     m_numtopk, k = input_tensor_permuted.shape
     assert (m_numtopk <= MAX_TOKENS_PER_EXPERT * topk), (
         f"m_numtopk must be less than MAX_TOKENS_PER_EXPERT("
@@ -1161,7 +1163,7 @@ def scaled_fp4_experts_quant(
                                 padded_k,
                                 dtype=torch.int32,
                                 device=input_tensor.device)
-    torch.ops._C.scaled_fp4_experts_quant(output, output_scales, input_tensor,
+    torch.ops._C.scaled_fp4_experts_quant(output, output_scales, input_tensor_permuted,
                                           input_global_scale,
                                           expert_offsets,
                                           blockscale_offsets)

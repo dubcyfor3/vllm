@@ -113,6 +113,23 @@ def bench_run(
     a1_gs = torch.ones((num_experts,), device=device, dtype=torch.float32)
     a2_gs = torch.ones((num_experts,), device=device, dtype=torch.float32)
 
+    ab_strides_13 = torch.full((num_experts,),
+                                  w1_fp4.shape[2] * 2,
+                                  dtype=torch.int64, 
+                                  device=w1_fp4.device)
+    c_strides_13 = torch.full((num_experts,),
+                                 w1_fp4.shape[1],
+                                 dtype=torch.int64,
+                                 device=w1_fp4.device)
+    ab_strides_2 = torch.full((num_experts,),
+                                 w2_fp4.shape[2] * 2,
+                                 dtype=torch.int64,
+                                 device=w2_fp4.device)
+    c_strides_2 = torch.full((num_experts,),
+                                 w2_fp4.shape[1],
+                                 dtype=torch.int64,
+                                 device=w2_fp4.device)
+
     for expert in range(num_experts):
         w1_e = w1[expert]
         w2_e = w2[expert]
@@ -184,6 +201,10 @@ def bench_run(
                     w2_fp4=w2_fp4,
                     w2_blockscale=w2_blockscale,
                     w2_alphas=w2_gs,
+                    ab_strides_13=ab_strides_13,
+                    ab_strides_2=ab_strides_2,
+                    c_strides_13=c_strides_13,
+                    c_strides_2=c_strides_2,
                     topk_weights=topk_weights,
                     topk_ids=topk_ids,
                     m=m,
@@ -224,6 +245,10 @@ def bench_run(
                 w2_fp4=w2_fp4,
                 w2_blockscale=w2_blockscale,
                 w2_alphas=w2_alphas,
+                ab_strides_13=ab_strides_13,
+                ab_strides_2=ab_strides_2,
+                c_strides_13=c_strides_13,
+                c_strides_2=c_strides_2,
                 topk_weights=topk_weights,
                 topk_ids=topk_ids,
                 m=m,
