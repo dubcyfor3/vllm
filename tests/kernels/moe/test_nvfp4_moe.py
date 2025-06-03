@@ -146,19 +146,19 @@ def test_cutlass_fp4_moe_no_graph(m: int, n: int, k: int, e: int, topk: int,
         # strides for the cutlass moe_fp4 kernel
         ab_strides_13 = torch.full((e,),
                                   w1_q.shape[2] * 2,
-                                  dtype=torch.int32, 
+                                  dtype=torch.int64, 
                                   device=w1_q.device)
         c_strides_13 = torch.full((e,),
                                  w1_q.shape[1],
-                                 dtype=torch.int32,
+                                 dtype=torch.int64,
                                  device=w1_q.device)
         ab_strides_2 = torch.full((e,),
                                  w2_q.shape[2] * 2,
-                                 dtype=torch.int32,
+                                 dtype=torch.int64,
                                  device=w2_q.device)
         c_strides_2 = torch.full((e,),
                                  w2_q.shape[1],
-                                 dtype=torch.int32,
+                                 dtype=torch.int64,
                                  device=w2_q.device)
         
         cutlass_output = cutlass_moe_fp4(
@@ -203,7 +203,8 @@ def run_with_expert_maps(num_experts: int, num_local_experts: int,
        slice_params = [
             "a1_gscale", "a2_gscale", 
             "w1_fp4", "w2_fp4", "w1_blockscale",
-            "w2_blockscale", "w1_alphas", "w2_alphas"
+            "w2_blockscale", "w1_alphas", "w2_alphas",
+            "ab_strides_13", "ab_strides_2", "c_strides_13", "c_strides_2"
        ]
        full_tensors = {
            k: v
@@ -212,13 +213,10 @@ def run_with_expert_maps(num_experts: int, num_local_experts: int,
        }
 
        for i in range(0, num_experts, num_local_experts):
-           l, u = i, i + num_local_experts
+           l, u = i, min(i + num_local_experts, num_experts)
            # make expert map
-           expert_map = [-1] * num_experts
-           expert_map[l:u] = list(range(num_local_experts))
-           expert_map = torch.tensor(expert_map,
-                                     dtype=torch.int32,
-                                     device="cuda")
+           expert_map = torch.full((num_experts,), -1, dtype=torch.int32, device="cuda")
+           expert_map[l:u] = torch.arange(u - l, dtype=torch.int32, device="cuda")
 
            # update cutlass moe arg with expert_map
            cutlass_fp4_moe_kwargs["expert_map"] = expert_map
@@ -284,6 +282,23 @@ def test_cutlass_moe_EP(
         a1_gs = torch.ones((e, ), device="cuda", dtype=torch.float32)
         a2_gs = torch.ones((e, ), device="cuda", dtype=torch.float32)
 
+        ab_strides_13 = torch.full((e,),
+                                  w1_fp4.shape[2] * 2,
+                                  dtype=torch.int64, 
+                                  device=w1_fp4.device)
+        c_strides_13 = torch.full((e,),
+                                  w1_fp4.shape[1],
+                                  dtype=torch.int64, 
+                                  device=w1_fp4.device)
+        ab_strides_2 = torch.full((e,),
+                                  w2_fp4.shape[2] * 2,
+                                  dtype=torch.int64, 
+                                  device=w2_fp4.device)
+        c_strides_2 = torch.full((e,),
+                                  w2_fp4.shape[1],
+                                  dtype=torch.int64, 
+                                  device=w2_fp4.device)
+
         assert e % local_expert_size == 0, "Cannot distribute experts evenly"
 
         topk_weights, topk_ids, _ = fused_topk(a, score, topk,
@@ -303,6 +318,10 @@ def test_cutlass_moe_EP(
                                          w2_blockscale=w2_blockscale,
                                          w1_alphas=1/w1_gs,
                                          w2_alphas=1/w2_gs,
+                                         ab_strides_13=ab_strides_13,
+                                         ab_strides_2=ab_strides_2,
+                                         c_strides_13=c_strides_13,
+                                         c_strides_2=c_strides_2,
                                          topk_weights=topk_weights,
                                          topk_ids=topk_ids,
                                          device=a.device,
@@ -348,4 +367,4 @@ if __name__ == "__main__":
     topk = 1
     local_expert_size = 4
     test_cutlass_fp4_moe_no_graph(m=m, n=n, k=k, e=e, topk=topk, dtype=torch.half)
-    # test_cutlass_moe_EP(m=m, n=n, k=k, e=e, topk=topk, local_expert_size=local_expert_size)
+    test_cutlass_moe_EP(m=m, n=n, k=k, e=e, topk=topk, local_expert_size=local_expert_size)
